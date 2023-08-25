@@ -52,6 +52,7 @@ Create a conrib library that helps instrumenting the RandomGenerator API.
     - [x] Use otel globals in case like TraceProvider is not supplied
 
 **It is Nice To Have** (not requirement, and should only do if we have enough remaining time):
+
 - [ ] provide metrics as well as part of the instrument
 - [ ] support Lumigo's payload masking feature
   to some degree through an optional configuration
@@ -71,10 +72,10 @@ this action is traced with a new span, which is linked back to the random genera
 The goal of this task is to showcase how using spans as part of an asynchronous process can be linked back to an
 original span.
 
-- [ ] Async call started as part of the Intn method call
-- [ ] Async call has its own span context
-  - [ ] the traceparent is the outer trace not the span created as part of the Intn method
-  - [ ] span created for Intn method is linked in the async call's span
+- [x] Async call started as part of the Intn method call
+- [x] Async call has its own span context
+    - [x] the traceparent is the outer trace not the span created as part of the Intn method
+    - [x] span created for Intn method is linked in the async call's span
 
 ## Architecture Decision Records
 
@@ -87,9 +88,19 @@ we could consider transitioning to a more maintainable, modular nested testing s
 
 ### process.cpu.time
 
-The label "process.cpu.time" might seem unclear without a precise context. 
+The label "process.cpu.time" might seem unclear without a precise context.
 I've interpreted it in alignment with other attributes that use the "process." prefix.
 
-Obtaining this data typically necessitates either active pprof usage or system interaction via syscalls. 
-To ensure portability and to avoid a platform-specific implementation, 
+Obtaining this data typically necessitates either active pprof usage or system interaction via syscalls.
+To ensure portability and to avoid a platform-specific implementation,
 I've opted to leverage the gopsutil open-source library to fetch the CPU time.
+
+### Async Span Example
+
+Given that a random number generator seldom requires asynchronous operations,
+I've kept the implementation straightforward.
+The design primarily illustrates span creation in an asynchronous context
+and demonstrates how to link back to another span.
+Were the use-case to involve more intricate scenarios,
+like tracing asynchronous calls across multiple backend servers,
+the example would be more intricate and engaging.

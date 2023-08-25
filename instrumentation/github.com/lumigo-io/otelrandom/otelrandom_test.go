@@ -13,6 +13,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 	"testing"
+	"time"
 )
 
 // I use blackbox testing, to gain a better understanding about my own API
@@ -132,6 +133,39 @@ func TestRandomGeneratorInstrument_Intn_withTracerProvider(t *testing.T) {
 	assert.Empty(t, otelstub.SpanExporter.ExportedSpans())
 	_ = instrumentedRandomGenerator.Intn(ctx, rnd.IntB(1, 42))
 	assert.NotEmpty(t, otelstub.SpanExporter.ExportedSpans())
+}
+
+func TestRandomGeneratorInstrument_Intn_asyncSpanExample(t *testing.T) {
+	var (
+		otelstub        = otelkit.Stub(t)
+		randomGenerator = StubRandomGenerator{IntnFunc: func(ctx context.Context, n int) int { return rnd.IntN(n) }}
+		subject         = otelrandom.NewRandomGenerator(randomGenerator)
+	)
+
+	rootCtx, rootSpan := otel.GetTracerProvider().Tracer("TestTracer").Start(context.Background(), "RootSpan")
+	defer rootSpan.End()
+
+	_ = subject.Intn(rootCtx, rnd.IntB(1, 42))
+
+	t.Log("eventually, we a span will be exported that has a link pointing to an already exported span")
+	assert.EventuallyWithin(3*time.Second).Assert(t, func(t assert.It) {
+		assert.OneOf(t, otelstub.SpanExporter.ExportedSpans(), func(t assert.It, span sdktrace.ReadOnlySpan) {
+			assert.Equal(t, rootSpan.SpanContext(), span.Parent(),
+				"expected to have the root span as its traceparent and not Intn method span")
+
+			assert.OneOf(t, span.Links(), func(t assert.It, link sdktrace.Link) { // one of the span's link is ...
+				assert.NotEqual(t, link.SpanContext, span.Parent(),
+					"expected that the linked span is NOT the traceparent")
+
+				assert.OneOf(t, otelstub.SpanExporter.ExportedSpans(), func(t assert.It, exportedSpan sdktrace.ReadOnlySpan) {
+
+					assert.Equal(t, link.SpanContext, exportedSpan.SpanContext(),
+						"expected that the linked span is also a valid and existing exported span")
+
+				})
+			})
+		})
+	})
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

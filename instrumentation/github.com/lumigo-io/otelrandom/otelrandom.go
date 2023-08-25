@@ -42,12 +42,18 @@ type RandomGeneratorInstrument struct {
 }
 
 func (i RandomGeneratorInstrument) Intn(ctx context.Context, n int) int {
-	tracer := i.config.GetTracerProvider().Tracer(i.config.TracerName("RandomGenerator"))
-	ctx, span := tracer.Start(ctx, i.config.SpanName("RandomGenerator.Intn"))
+	spanCtx, span := i.tracer().Start(ctx, i.config.SpanName("RandomGenerator.Intn"))
 	defer span.End()
 	span.SetAttributes(i.payloadAttributes(n)...)
 	span.SetAttributes(i.profilingAttributes()...)
-	return i.RandomGenerator.Intn(ctx, n)
+	// Passing the root context ensure the expected structure from the specification.
+	// passing current span's span context to ensure linking
+	go i.exampleAsyncSpan(ctx, span.SpanContext())
+	return i.RandomGenerator.Intn(spanCtx, n) // spanCtx passed to link possible further sub span creations
+}
+
+func (i RandomGeneratorInstrument) tracer() trace.Tracer {
+	return i.config.GetTracerProvider().Tracer(i.config.TracerName("RandomGenerator"))
 }
 
 func (i RandomGeneratorInstrument) payloadAttributes(payload any) []attribute.KeyValue {
@@ -77,6 +83,24 @@ func (i RandomGeneratorInstrument) profilingAttributes() []attribute.KeyValue {
 	return []attribute.KeyValue{
 		ProcessCPUTime.Float64(total),
 	}
+}
+
+// exampleAsyncSpan is expected to executed with the go keyword, to simulate async workload.
+// trace.Span created as part of the function
+// is what is often considered as async span in the Go OpenTelemetry implementation.
+func (i RandomGeneratorInstrument) exampleAsyncSpan(
+	// rootContext must be the original context.Context that might or might not contain the root span.
+	// It must not contain the Intn method's span context
+	rootContext context.Context,
+	// spanToLink is to which we will link in our span.
+	// It must be the Intn method's span context.
+	spanToLink trace.SpanContext,
+) {
+	_, asyncSpan := i.tracer().Start(rootContext, "AsyncSpan",
+		trace.WithLinks(trace.Link{SpanContext: spanToLink}))
+	defer asyncSpan.End()
+	//
+	// some work to do
 }
 
 // Option is as by convention in the otel contrib libs, the preferred way to inject parameters to the instrumentation.
