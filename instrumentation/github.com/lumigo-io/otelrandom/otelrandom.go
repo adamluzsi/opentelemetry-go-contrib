@@ -27,7 +27,11 @@ type RandomGenerator interface {
 }
 
 func NewRandomGenerator(rnd RandomGenerator, opts ...Option) RandomGenerator {
-	return RandomGeneratorInstrument{RandomGenerator: rnd}
+	instrumentedRandomGenerator := RandomGeneratorInstrument{RandomGenerator: rnd}
+	for _, opt := range opts {
+		opt.configure(&instrumentedRandomGenerator.config)
+	}
+	return instrumentedRandomGenerator
 }
 
 type RandomGeneratorInstrument struct {
@@ -80,11 +84,16 @@ func (i RandomGeneratorInstrument) profilingAttributes() []attribute.KeyValue {
 // but the conventions in otel contrib packages is to use variadic Option parameter.
 type Option interface{ configure(*config) }
 
+func WithTracerProvider(tp trace.TracerProvider) Option {
+	return optionFunc(func(c *config) { c.TracerProvider = tp })
+}
+
 type optionFunc func(c *config)
 
 func (fn optionFunc) configure(c *config) { fn(c) }
 
 // config represents the configuration options available for the instrumented RandomGenerator.
+// In other instrument libraries, this is the convention rather than having these fields on the instrument itself.
 type config struct {
 	TracerProvider trace.TracerProvider
 

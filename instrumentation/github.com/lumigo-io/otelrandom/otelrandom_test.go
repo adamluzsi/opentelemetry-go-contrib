@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 	"testing"
 )
 
@@ -108,6 +109,29 @@ func TestRandomGeneratorInstrument_Intn_withCPUTimeAttribute(t *testing.T) {
 			assert.True(t, totalCPUTime <= gotTotal)
 		})
 	})
+}
+
+func TestRandomGeneratorInstrument_Intn_withTracerProvider(t *testing.T) {
+	var (
+		otelstub        = otelkit.Stub(t)
+		ctx             = context.Background()
+		randomGenerator = StubRandomGenerator{IntnFunc: func(ctx context.Context, n int) int {
+			return rnd.IntN(n)
+		}}
+	)
+
+	t.Log("given we set the global trace provider to a NoOperationTracerProvider")
+	t.Log("if it is being used, then it will be ignored")
+	ogTP := otel.GetTracerProvider()
+	otel.SetTracerProvider(trace.NewNoopTracerProvider())
+	t.Cleanup(func() { otel.SetTracerProvider(ogTP) })
+
+	instrumentedRandomGenerator := otelrandom.NewRandomGenerator(randomGenerator,
+		otelrandom.WithTracerProvider(otelstub.TracerProvider))
+
+	assert.Empty(t, otelstub.SpanExporter.ExportedSpans())
+	_ = instrumentedRandomGenerator.Intn(ctx, rnd.IntB(1, 42))
+	assert.NotEmpty(t, otelstub.SpanExporter.ExportedSpans())
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

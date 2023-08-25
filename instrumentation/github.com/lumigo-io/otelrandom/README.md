@@ -49,7 +49,7 @@ Create a conrib library that helps instrumenting the RandomGenerator API.
 
 - [x] Follow the idioms of other contrib packages
     - [x] provide a factory function with variadic Option parameters
-    - [ ] Use otel globals in case like TraceProvider is not supplied
+    - [x] Use otel globals in case like TraceProvider is not supplied
 
 **It is Nice To Have** (not requirement, and should only do if we have enough remaining time):
 - [ ] provide metrics as well as part of the instrument
