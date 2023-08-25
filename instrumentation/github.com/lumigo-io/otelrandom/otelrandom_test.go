@@ -3,12 +3,12 @@ package otelrandom_test
 import (
 	"context"
 	"encoding/json"
-	"github.com/adamluzsi/opentelemetry-go-contrib/instrumentation/github.com/lumigo-io/otelrandom"
 	"github.com/adamluzsi/otelkit"
 	"github.com/adamluzsi/testcase"
 	"github.com/adamluzsi/testcase/assert"
 	"github.com/adamluzsi/testcase/random"
 	"github.com/shirou/gopsutil/v3/cpu"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/lumigo-io/otelrandom"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -41,10 +41,8 @@ func TestRandomGeneratorInstrument_Intn_smoke(t *testing.T) {
 
 func TestRandomGeneratorInstrument_Intn_useTraceparent(t *testing.T) {
 	var (
-		otelstub        = otelkit.Stub(t)
-		randomGenerator = StubRandomGenerator{IntnFunc: func(ctx context.Context, n int) int {
-			return rnd.IntN(n)
-		}}
+		otelstub                    = otelkit.Stub(t)
+		randomGenerator             = StubRandomGenerator{}
 		instrumentedRandomGenerator = otelrandom.NewRandomGenerator(randomGenerator) // use global otel trace provider
 	)
 
@@ -64,12 +62,10 @@ func TestRandomGeneratorInstrument_Intn_useTraceparent(t *testing.T) {
 
 func TestRandomGeneratorInstrument_Intn_hasLumigoPayloadAttributes(t *testing.T) {
 	var (
-		otelstub        = otelkit.Stub(t)
-		ctx             = context.Background()
-		inputArgument   = rnd.IntBetween(1, 42)
-		randomGenerator = StubRandomGenerator{IntnFunc: func(ctx context.Context, n int) int {
-			return rnd.IntN(n)
-		}}
+		otelstub                    = otelkit.Stub(t)
+		ctx                         = context.Background()
+		inputArgument               = rnd.IntBetween(1, 42)
+		randomGenerator             = StubRandomGenerator{}
 		instrumentedRandomGenerator = otelrandom.NewRandomGenerator(randomGenerator) // use global otel trace provider
 	)
 
@@ -90,11 +86,9 @@ func TestRandomGeneratorInstrument_Intn_hasLumigoPayloadAttributes(t *testing.T)
 
 func TestRandomGeneratorInstrument_Intn_withCPUTimeAttribute(t *testing.T) {
 	var (
-		otelstub        = otelkit.Stub(t)
-		ctx             = context.Background()
-		randomGenerator = StubRandomGenerator{IntnFunc: func(ctx context.Context, n int) int {
-			return rnd.IntN(n)
-		}}
+		otelstub                    = otelkit.Stub(t)
+		ctx                         = context.Background()
+		randomGenerator             = StubRandomGenerator{}
 		instrumentedRandomGenerator = otelrandom.NewRandomGenerator(randomGenerator) // use global otel trace provider
 	)
 
@@ -117,9 +111,7 @@ func TestRandomGeneratorInstrument_Intn_withTracerProvider(t *testing.T) {
 	var (
 		otelstub        = otelkit.Stub(t)
 		ctx             = context.Background()
-		randomGenerator = StubRandomGenerator{IntnFunc: func(ctx context.Context, n int) int {
-			return rnd.IntN(n)
-		}}
+		randomGenerator = StubRandomGenerator{}
 	)
 
 	t.Log("given we set the global trace provider to a NoOperationTracerProvider")
@@ -139,7 +131,7 @@ func TestRandomGeneratorInstrument_Intn_withTracerProvider(t *testing.T) {
 func TestRandomGeneratorInstrument_Intn_asyncSpanExample(t *testing.T) {
 	var (
 		otelstub        = otelkit.Stub(t)
-		randomGenerator = StubRandomGenerator{IntnFunc: func(ctx context.Context, n int) int { return rnd.IntN(n) }}
+		randomGenerator = StubRandomGenerator{}
 		subject         = otelrandom.NewRandomGenerator(randomGenerator)
 	)
 
@@ -172,7 +164,7 @@ func TestRandomGeneratorInstrument_Intn_asyncSpanExample(t *testing.T) {
 func TestRandomGeneratorInstrument_Intn_raceSafe(t *testing.T) {
 	var (
 		otelstub        = otelkit.Stub(t)
-		randomGenerator = StubRandomGenerator{IntnFunc: func(ctx context.Context, n int) int { return rnd.IntN(n) }}
+		randomGenerator = StubRandomGenerator{}
 		subject         = otelrandom.NewRandomGenerator(randomGenerator)
 		ctx             = context.Background()
 	)
@@ -185,6 +177,27 @@ func TestRandomGeneratorInstrument_Intn_raceSafe(t *testing.T) {
 			it.Must.NotEmpty(otelstub.SpanExporter.ExportedSpans())
 		})
 	})
+}
+
+func TestRandomGeneratorInstrument_Intn_contextPropagation(t *testing.T) {
+	const ctxValKey = "key"
+	var (
+		_             = otelkit.Stub(t)
+		inputArgument = rnd.IntB(1, 42)
+		inputContext  = context.WithValue(context.Background(), ctxValKey, "value")
+		randomGen     = StubRandomGenerator{IntnFunc: func(ctx context.Context, n int) int {
+			assert.NotNil(t, ctx)
+			assert.Equal(t, ctx.Value(ctxValKey), inputContext.Value(ctxValKey),
+				"expected that the received context has the received context values")
+			assert.NotNil(t, trace.SpanFromContext(ctx),
+				"expected that the propagated context has a span already")
+
+			assert.Equal(t, inputArgument, n)
+			return rnd.IntN(n)
+		}}
+		instrumentedRandomGenerator = otelrandom.NewRandomGenerator(randomGen) // use global otel trace provider
+	)
+	_ = instrumentedRandomGenerator.Intn(inputContext, inputArgument)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -204,5 +217,8 @@ type StubRandomGenerator struct {
 }
 
 func (stub StubRandomGenerator) Intn(ctx context.Context, n int) int {
+	if stub.IntnFunc == nil {
+		return rnd.IntN(n)
+	}
 	return stub.IntnFunc(ctx, n)
 }

@@ -1,4 +1,4 @@
-module github.com/adamluzsi/opentelemetry-go-contrib/instrumentation/github.com/lumigo-io/otelrandom
+module go.opentelemetry.io/contrib/instrumentation/github.com/lumigo-io/otelrandom
 
 go 1.21.0
 

@@ -42,7 +42,7 @@ type RandomGeneratorInstrument struct {
 }
 
 func (i RandomGeneratorInstrument) Intn(ctx context.Context, n int) int {
-	spanCtx, span := i.tracer().Start(ctx, i.config.SpanName("RandomGenerator.Intn"))
+	spanCtx, span := i.tracer().Start(ctx, "RandomGenerator.Intn")
 	defer span.End()
 	span.SetAttributes(i.payloadAttributes(n)...)
 	span.SetAttributes(i.profilingAttributes()...)
@@ -53,7 +53,7 @@ func (i RandomGeneratorInstrument) Intn(ctx context.Context, n int) int {
 }
 
 func (i RandomGeneratorInstrument) tracer() trace.Tracer {
-	return i.config.GetTracerProvider().Tracer(i.config.TracerName("RandomGenerator"))
+	return i.config.GetTracerProvider().Tracer("RandomGenerator")
 }
 
 func (i RandomGeneratorInstrument) payloadAttributes(payload any) []attribute.KeyValue {
@@ -120,9 +120,6 @@ func (fn optionFunc) configure(c *config) { fn(c) }
 // In other instrument libraries, this is the convention rather than having these fields on the instrument itself.
 type config struct {
 	TracerProvider trace.TracerProvider
-
-	TracerNameFormatter func(name string) string
-	SpanNameFormatter   func(name string) string
 }
 
 func (c config) GetTracerProvider() trace.TracerProvider {
@@ -130,18 +127,4 @@ func (c config) GetTracerProvider() trace.TracerProvider {
 		return c.TracerProvider
 	}
 	return otel.GetTracerProvider()
-}
-
-func (c config) TracerName(name string) string {
-	if c.TracerNameFormatter != nil {
-		return c.TracerNameFormatter(name)
-	}
-	return name
-}
-
-func (c config) SpanName(name string) string {
-	if c.SpanNameFormatter != nil {
-		return c.SpanNameFormatter(name)
-	}
-	return name
 }
