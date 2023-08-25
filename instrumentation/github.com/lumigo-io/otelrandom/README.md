@@ -9,7 +9,7 @@ Implement payload instrumentation for the following API:
 
 ```go
 type RandomGenerator interface {
-    Intn(ctx context.Context, n int) (int, error)	
+    Intn(ctx context.Context, n int) int	
 }
 ```
 
