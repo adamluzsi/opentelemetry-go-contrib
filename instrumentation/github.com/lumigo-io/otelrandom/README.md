@@ -44,8 +44,8 @@ Create a conrib library that helps instrumenting the RandomGenerator API.
 - [ ] If traceparent is present in the context, it must use it for the newly created tracing span
 
 **It Should**:
-- [ ] Follow the idioms of other contrib packages
-  - [ ] provide a factory function with variadic Option parameters
+- [x] Follow the idioms of other contrib packages
+  - [x] provide a factory function with variadic Option parameters
   - [ ] Use otel globals in case like TraceProvider is not supplied
 
 **It is Nice To Have** (not requirement, and should only do if we have enough remaining time):
@@ -67,3 +67,12 @@ The goal of this task is to showcase how using spans as part of an asynchronous 
 - [ ] Async call has its own span context
   - [ ] the traceparent is the outer trace not the span created as part of the Intn method
   - [ ] span created for Intn method is linked in the async call's span
+
+## Architecture Decision Records
+
+### Flat UnitTest Testing Style
+
+For this instrumentation package, which is intended for open source contribution,
+I'll employ a flat unit testing style given its widespread familiarity.
+In the event that this package becomes exclusively maintained by Lumigo in the future,
+we could consider transitioning to a more maintainable, modular nested testing style.
