@@ -8,9 +8,12 @@ for the sake of Lumigo OTeL engineer exam.
 Implement payload instrumentation for the following API:
 
 ```go
+package example
+
 type RandomGenerator interface {
-Intn(ctx context.Context, n int) int
+	Intn(ctx context.Context, n int) int
 }
+
 ```
 
 This API stands for a function that generates random integer values, and it can also propagate context.
