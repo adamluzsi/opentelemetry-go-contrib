@@ -2,8 +2,20 @@ package otelrandom
 
 import (
 	"context"
+	"encoding/json"
+	"github.com/shirou/gopsutil/v3/cpu"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+)
+
+const (
+	// Payload is the JSON serialised content of the captured input payload
+	Payload = attribute.Key("method.payload")
+	// PayloadSize is the Payload bytes size
+	PayloadSize = attribute.Key("method.payload.size")
+	// ProcessCPUTime is the total cpu time for the current process.
+	ProcessCPUTime = attribute.Key("process.cpu.time")
 )
 
 // RandomGenerator represents the function signature we've identified for instrumentation during our discussion.
@@ -27,10 +39,40 @@ type RandomGeneratorInstrument struct {
 
 func (i RandomGeneratorInstrument) Intn(ctx context.Context, n int) int {
 	tracer := i.config.GetTracerProvider().Tracer(i.config.TracerName("RandomGenerator"))
-	ctx, span := tracer.Start(context.TODO(), i.config.SpanName("RandomGenerator.Intn"))
+	ctx, span := tracer.Start(ctx, i.config.SpanName("RandomGenerator.Intn"))
 	defer span.End()
-
+	span.SetAttributes(i.payloadAttributes(n)...)
+	span.SetAttributes(i.profilingAttributes()...)
 	return i.RandomGenerator.Intn(ctx, n)
+}
+
+func (i RandomGeneratorInstrument) payloadAttributes(payload any) []attribute.KeyValue {
+	payloadValue, err := json.Marshal(payload)
+	if err != nil {
+		// nice to have could be to add logging here,
+		// but because we are in an instrument scope,
+		// and we don't own the application logging configuration
+		// we use a testing based approach to ensure no unserializable value is passed to this method.
+		return nil
+	}
+	return []attribute.KeyValue{
+		Payload.String(string(payloadValue)),
+		PayloadSize.Int(len(payloadValue)),
+	}
+}
+
+func (i RandomGeneratorInstrument) profilingAttributes() []attribute.KeyValue {
+	times, err := cpu.Times(false /* false -> aggregate total */)
+	if err != nil {
+		return nil // log error
+	}
+	var total float64
+	for _, tm := range times {
+		total += tm.User + tm.System
+	}
+	return []attribute.KeyValue{
+		ProcessCPUTime.Float64(total),
+	}
 }
 
 // Option is as by convention in the otel contrib libs, the preferred way to inject parameters to the instrumentation.
