@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/adamluzsi/opentelemetry-go-contrib/instrumentation/github.com/lumigo-io/otelrandom"
 	"github.com/adamluzsi/otelkit"
+	"github.com/adamluzsi/testcase"
 	"github.com/adamluzsi/testcase/assert"
 	"github.com/adamluzsi/testcase/random"
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -164,6 +165,24 @@ func TestRandomGeneratorInstrument_Intn_asyncSpanExample(t *testing.T) {
 
 				})
 			})
+		})
+	})
+}
+
+func TestRandomGeneratorInstrument_Intn_raceSafe(t *testing.T) {
+	var (
+		otelstub        = otelkit.Stub(t)
+		randomGenerator = StubRandomGenerator{IntnFunc: func(ctx context.Context, n int) int { return rnd.IntN(n) }}
+		subject         = otelrandom.NewRandomGenerator(randomGenerator)
+		ctx             = context.Background()
+	)
+	testcase.Race(func() { // will create a arrangement where unsafe code will have race condition
+		subject.Intn(ctx, rnd.IntB(1, 42))
+	}, func() {
+		subject.Intn(ctx, rnd.IntB(1, 42))
+	}, func() {
+		assert.EventuallyWithin(time.Second).Assert(t, func(it assert.It) {
+			it.Must.NotEmpty(otelstub.SpanExporter.ExportedSpans())
 		})
 	})
 }
