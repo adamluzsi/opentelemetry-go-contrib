@@ -104,3 +104,22 @@ and demonstrates how to link back to another span.
 Were the use-case to involve more intricate scenarios,
 like tracing asynchronous calls across multiple backend servers,
 the example would be more intricate and engaging.
+
+### Structure and API Design
+
+The design of this instrument package closely aligns with the conventions seen in otel's instrument packages.
+For instance, it employs an unexported configuration type that encapsulates the instrument's setup.
+This can be configured through the Factory function' (NewRandomGenerator) variadic Option parameter.
+
+```go
+otelrandom.NewRandomGenerator(randomGenerator,
+    otelrandom.WithTracerProvider(MyTracerProvider))
+```
+
+While this might not be an idiomatic Go approach, it does increase the likelihood of our contribution being accepted,
+given its similarity in look and feel to other instrument packages.
+
+A more idiomatic Go approach might involve using a struct with dependencies presented as exported fields.
+This structure allows for straightforward dependency injection by populating these fields, streamlining testing.
+If dependencies aren't provided, the system defaults to zero values,
+like the otel global values (e.g., otel.GetTracerProvider()).
