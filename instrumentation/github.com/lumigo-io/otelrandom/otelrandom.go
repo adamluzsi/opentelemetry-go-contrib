@@ -18,7 +18,10 @@ const (
 	ProcessCPUTime = attribute.Key("process.cpu.time")
 )
 
-const tracerName = "opentelemetry-go-contrib/instrumentation/github.com/lumigo-io/otelrandom/RandomGenerator"
+const (
+	tracerName   = "opentelemetry-go-contrib/instrumentation/github.com/lumigo-io/otelrandom/RandomGenerator"
+	traceVersion = "0.0.1"
+)
 
 // RandomGenerator represents the function signature we've identified for instrumentation during our discussion.
 //
@@ -36,7 +39,8 @@ func NewRandomGenerator(rnd RandomGenerator, opts ...Option) RandomGenerator {
 	if instrument.config.TracerProvider == nil {
 		instrument.config.TracerProvider = otel.GetTracerProvider()
 	}
-	instrument.config.Tracer = instrument.config.TracerProvider.Tracer(tracerName)
+	instrument.config.Tracer = instrument.config.TracerProvider.Tracer(tracerName,
+		trace.WithInstrumentationVersion(traceVersion))
 	return instrument
 }
 
