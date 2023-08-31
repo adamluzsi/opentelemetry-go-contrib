@@ -18,6 +18,8 @@ const (
 	ProcessCPUTime = attribute.Key("process.cpu.time")
 )
 
+const tracerName = "opentelemetry-go-contrib/instrumentation/github.com/lumigo-io/otelrandom/RandomGenerator"
+
 // RandomGenerator represents the function signature we've identified for instrumentation during our discussion.
 //
 // Much like how otelhttp leverages http.Handler as its foundational layer for embedding telemetry into an http.Handler,
@@ -27,22 +29,26 @@ type RandomGenerator interface {
 }
 
 func NewRandomGenerator(rnd RandomGenerator, opts ...Option) RandomGenerator {
-	instrumentedRandomGenerator := RandomGeneratorInstrument{RandomGenerator: rnd}
+	instrument := randomGeneratorInstrument{RandomGenerator: rnd}
 	for _, opt := range opts {
-		opt.configure(&instrumentedRandomGenerator.config)
+		opt.configure(&instrument.config)
 	}
-	return instrumentedRandomGenerator
+	if instrument.config.TracerProvider == nil {
+		instrument.config.TracerProvider = otel.GetTracerProvider()
+	}
+	instrument.config.Tracer = instrument.config.TracerProvider.Tracer(tracerName)
+	return instrument
 }
 
-type RandomGeneratorInstrument struct {
+type randomGeneratorInstrument struct {
 	// Embedding will allow us that even if the functionality changes,
-	// our users of this Instrument can still use RandomGeneratorInstrument as a valid RandomGenerator.
+	// our users of this Instrument can still use randomGeneratorInstrument as a valid RandomGenerator.
 	RandomGenerator
 	config config
 }
 
-func (i RandomGeneratorInstrument) Intn(ctx context.Context, n int) int {
-	spanCtx, span := i.tracer().Start(ctx, "RandomGenerator.Intn")
+func (i randomGeneratorInstrument) Intn(ctx context.Context, n int) int {
+	spanCtx, span := i.config.Tracer.Start(ctx, "RandomGenerator.Intn")
 	defer span.End()
 	span.SetAttributes(i.payloadAttributes(n)...)
 	span.SetAttributes(i.profilingAttributes()...)
@@ -52,11 +58,7 @@ func (i RandomGeneratorInstrument) Intn(ctx context.Context, n int) int {
 	return i.RandomGenerator.Intn(spanCtx, n) // spanCtx passed to link possible further sub span creations
 }
 
-func (i RandomGeneratorInstrument) tracer() trace.Tracer {
-	return i.config.GetTracerProvider().Tracer("RandomGenerator")
-}
-
-func (i RandomGeneratorInstrument) payloadAttributes(payload any) []attribute.KeyValue {
+func (i randomGeneratorInstrument) payloadAttributes(payload any) []attribute.KeyValue {
 	payloadValue, err := json.Marshal(payload)
 	if err != nil {
 		// nice to have could be to add logging here,
@@ -71,7 +73,7 @@ func (i RandomGeneratorInstrument) payloadAttributes(payload any) []attribute.Ke
 	}
 }
 
-func (i RandomGeneratorInstrument) profilingAttributes() []attribute.KeyValue {
+func (i randomGeneratorInstrument) profilingAttributes() []attribute.KeyValue {
 	times, err := cpu.Times(false /* false -> aggregate total */)
 	if err != nil {
 		return nil // log error
@@ -88,7 +90,7 @@ func (i RandomGeneratorInstrument) profilingAttributes() []attribute.KeyValue {
 // exampleAsyncSpan is expected to executed with the go keyword, to simulate async workload.
 // trace.Span created as part of the function
 // is what is often considered as async span in the Go OpenTelemetry implementation.
-func (i RandomGeneratorInstrument) exampleAsyncSpan(
+func (i randomGeneratorInstrument) exampleAsyncSpan(
 	// rootContext must be the original context.Context that might or might not contain the root span.
 	// It must not contain the Intn method's span context
 	rootContext context.Context,
@@ -96,7 +98,7 @@ func (i RandomGeneratorInstrument) exampleAsyncSpan(
 	// It must be the Intn method's span context.
 	spanToLink trace.SpanContext,
 ) {
-	_, asyncSpan := i.tracer().Start(rootContext, "AsyncSpan",
+	_, asyncSpan := i.config.Tracer.Start(rootContext, "AsyncSpan",
 		trace.WithLinks(trace.Link{SpanContext: spanToLink}))
 	defer asyncSpan.End()
 	//
@@ -120,11 +122,5 @@ func (fn optionFunc) configure(c *config) { fn(c) }
 // In other instrument libraries, this is the convention rather than having these fields on the instrument itself.
 type config struct {
 	TracerProvider trace.TracerProvider
-}
-
-func (c config) GetTracerProvider() trace.TracerProvider {
-	if c.TracerProvider != nil {
-		return c.TracerProvider
-	}
-	return otel.GetTracerProvider()
+	Tracer         trace.Tracer
 }
